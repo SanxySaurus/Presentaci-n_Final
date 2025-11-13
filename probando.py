@@ -1,238 +1,400 @@
 import tkinter as tk
-from tkinter import font
+from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
+from pathlib import Path
+import json
+import os
 
-class WelcomeApp(tk.Tk):
+ASSETS_DIR = Path(__file__).parent
+
+
+# ------------------------------------------------------------
+#  MAIN APP
+# ------------------------------------------------------------
+class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Clínica ECG")
         self.geometry("430x932")
         self.configure(bg="white")
+        self.resizable(False, False)
 
-        self.create_header()
+        self._images = {}
+
+        container = tk.Frame(self, bg="white")
+        container.pack(fill="both", expand=True)
+
+        self.frames = {}
+        for F in (WelcomeFrame, RoleSelectionFrame, LoginFrame,
+                  DashboardFrame, UserFormFrame):
+            frame = F(parent=container, controller=self)
+            self.frames[F.__name__] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+
+        self.nav_stack = []
+        self.current_frame = None
+
+        self.show_frame("WelcomeFrame", push_stack=False)
+
+    def load_image(self, filename, size):
+        path = ASSETS_DIR / filename
+        try:
+            img = Image.open(path).resize(size, Image.LANCZOS)
+            tkimg = ImageTk.PhotoImage(img)
+            self._images[filename] = tkimg
+            return tkimg
+        except Exception:
+            return None
+
+    def show_frame(self, name, push_stack=True):
+        if push_stack and self.current_frame:
+            self.nav_stack.append(self.current_frame)
+        frame = self.frames[name]
+        frame.tkraise()
+        self.current_frame = name
+
+    def go_back(self):
+        if self.nav_stack:
+            prev = self.nav_stack.pop()
+            self.show_frame(prev, push_stack=False)
+
+
+# ------------------------------------------------------------
+#  BASE FRAME
+# ------------------------------------------------------------
+class BaseFrame(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg="white")
+        self.controller = controller
+
+    def create_header_image_or_bar(self):
+        img = self.controller.load_image("Encabezado.png", (430, 250))
+        if img:
+            lbl = tk.Label(self, image=img, bg="white")
+            lbl.image = img
+        else:
+            lbl = tk.Frame(self, bg="#0b63a8", width=430, height=160)
+            lbl.pack_propagate(False)
+            title = tk.Label(lbl, text="CLINIC", fg="white", bg="#0b63a8",
+                             font=("Arial", 20, "bold"))
+            title.pack(anchor="nw", padx=20, pady=14)
+        lbl.pack(fill="x")
+
+
+# ------------------------------------------------------------
+#  WELCOME SCREEN
+# ------------------------------------------------------------
+class WelcomeFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.create_header_image_or_bar()
         self.create_logo_text()
         self.create_login_section()
-        self.create_footer()
-
-    def create_header(self):
-        """Encabezado con imagen médica"""
-        try:
-            img_header = Image.open("Encabezado.png").resize((430, 250))
-            self.header_img = ImageTk.PhotoImage(img_header)
-            lbl_header = tk.Label(self, image=self.header_img, bg="white")
-            lbl_header.pack()
-        except:
-            lbl_header = tk.Label(self, bg="#003366", width=430, height=12)
-            lbl_header.pack()
 
     def create_logo_text(self):
-        """Logo y nombre de la clínica"""
-        try:
-            img_logo = Image.open("logo.webp").resize((180, 120))
-            self.logo_img = ImageTk.PhotoImage(img_logo)
-            lbl_logo = tk.Label(self, image=self.logo_img, bg="white")
-            lbl_logo.pack(pady=(40, 10))
-        except:
-            lbl_name = tk.Label(self, text="CLÍNICA ECG", font=("Arial", 22, "bold"), fg="#0047AB", bg="white")
-            lbl_name.pack(pady=(40, 10))
+        img = self.controller.load_image("logo.webp", (180, 120))
+        if img:
+            lbl_logo = tk.Label(self, image=img, bg="white")
+            lbl_logo.image = img
+            lbl_logo.pack(pady=(30, 8))
+        else:
+            lbl_name = tk.Label(self, text="CLÍNICA ECG",
+                                font=("Arial", 22, "bold"),
+                                fg="#0047AB", bg="white")
+            lbl_name.pack(pady=(30, 8))
 
-        lbl_sub = tk.Label(self, text="Bienvenido a tu clínica de confianza", font=("Arial", 12), bg="white")
-        lbl_sub.pack(pady=(0, 30))
+        lbl_sub = tk.Label(self, text="Bienvenido a tu clínica de confianza",
+                           font=("Arial", 12), bg="white")
+        lbl_sub.pack(pady=(0, 28))
 
     def create_login_section(self):
-        """Botón principal e hipervínculo"""
         btn_ingresar = tk.Button(self, text="Ingresar", font=("Arial", 14, "bold"),
                                  bg="#3366CC", fg="white", width=20, height=2,
-                                 bd=0, relief="flat", command=self.on_login)
+                                 bd=0, relief="flat",
+                                 command=lambda: self.controller.show_frame("RoleSelectionFrame"))
         btn_ingresar.pack(pady=10)
 
-        # 🔹 Texto: ¿Aún no tienes una cuenta? Regístrate aquí
-        frame_text = tk.Frame(self, bg="white")
-        frame_text.pack(pady=(10, 30))
 
-        lbl_text = tk.Label(frame_text, text="¿Aún no tienes una cuenta? ", font=("Arial", 10), bg="white")
-        lbl_text.pack(side="left")
-
-        lbl_link = tk.Label(frame_text, text="Regístrate aquí", font=("Arial", 10, "underline"),
-                            fg="#FF9900", bg="white", cursor="hand2")
-        lbl_link.pack(side="left")
-        lbl_link.bind("<Button-1>", lambda e: self.on_register())
-
-    def create_footer(self):
-        """Texto legal inferior"""
-        lbl_terms = tk.Label(self, text="Al registrarte aceptas nuestros Términos y Condiciones,\n"
-                                        "y nuestra Política de Privacidad.",
-                             font=("Arial", 8), bg="white", fg="gray")
-        lbl_terms.pack(side="bottom", pady=20)
-
-    def on_login(self):
-        """Abrir nueva ventana de selección de rol"""
-        self.withdraw()
-        RoleSelection(self)
-
-    def on_register(self):
-        print("Registro de nuevo usuario")
-
-
-class RoleSelection(tk.Toplevel):
-    """Ventana de selección de rol"""
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.title("Seleccionar Rol")
-        self.geometry("430x932")
-        self.configure(bg="white")
-
-        self.create_header()
+# ------------------------------------------------------------
+#  ROLE SELECTION
+# ------------------------------------------------------------
+class RoleSelectionFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.create_header_image_or_bar()
         self.create_back_button()
         self.create_buttons()
-        self.create_footer()
-
-    def create_header(self):
-        """Encabezado"""
-        try:
-            img_header = Image.open("Encabezado.png").resize((430, 250))
-            self.header_img = ImageTk.PhotoImage(img_header)
-            lbl_header = tk.Label(self, image=self.header_img, bg="white")
-            lbl_header.pack()
-        except:
-            lbl_header = tk.Label(self, bg="#003366", width=430, height=12)
-            lbl_header.pack()
 
     def create_back_button(self):
-        """Botón de volver"""
-        btn_back = tk.Button(self, text="←", font=("Arial", 20, "bold"),
+        btn_back = tk.Button(self, text="←", font=("Arial", 18, "bold"),
                              bg="#0047AB", fg="white", bd=0, relief="flat",
-                             cursor="hand2", command=self.go_back)
+                             cursor="hand2", command=self.controller.go_back)
         btn_back.place(x=380, y=10, width=40, height=40)
 
     def create_buttons(self):
-        """Botones de rol"""
         btn_style = {"font": ("Arial", 14, "bold"),
-                     "bg": "#3366CC",
-                     "fg": "white",
-                     "width": 20,
-                     "height": 2,
-                     "bd": 0,
-                     "relief": "flat"}
+                     "bg": "#3366CC", "fg": "white", "width": 20,
+                     "height": 2, "bd": 0, "relief": "flat"}
 
-        tk.Button(self, text="Administrador", **btn_style,
-                  command=lambda: self.select_role("Administrador")).pack(pady=20)
-        tk.Button(self, text="Doctor", **btn_style,
-                  command=lambda: self.select_role("Doctor")).pack(pady=20)
-        tk.Button(self, text="Paciente", **btn_style,
-                  command=lambda: self.select_role("Paciente")).pack(pady=20)
+        container = tk.Frame(self, bg="white")
+        container.pack(pady=40)
 
-    def create_footer(self):
-        lbl_terms = tk.Label(self, text="Al registrarte aceptas nuestros Términos y Condiciones,\n"
-                                        "y nuestra Política de Privacidad.",
-                             font=("Arial", 8), bg="white", fg="gray")
-        lbl_terms.pack(side="bottom", pady=20)
+        for role in ("Administrador", "Doctor", "Paciente"):
+            tk.Button(container, text=role, **btn_style,
+                      command=lambda r=role: self.open_login(r)).pack(pady=10)
 
-    def go_back(self):
-        self.destroy()
-        self.parent.deiconify()
+    def open_login(self, role):
+        login = self.controller.frames["LoginFrame"]
+        login.set_role(role)
+        self.controller.show_frame("LoginFrame")
 
 
-    def select_role(self, role):
-        self.withdraw()
-        LoginWindow(self, role)
-
-
-class LoginWindow(tk.Toplevel):
-    def __init__(self, parent, role):
-        super().__init__(parent)
-        self.role = role
-        self.parent = parent
-        self.title(f"Inicio de sesión - {role}")
-        self.geometry("430x932")
-        self.configure(bg="white")
-
-        self.create_header()
+# ------------------------------------------------------------
+#  LOGIN
+# ------------------------------------------------------------
+class LoginFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.role = None
+        self.create_header_image_or_bar()
         self.create_back_button()
-        self.create_login_form()
+        self.create_form()
 
-    def create_header(self):
-        try:
-            img_header = Image.open("Encabezado.png").resize((430, 250))
-            self.header_img = ImageTk.PhotoImage(img_header)
-            lbl_header = tk.Label(self, image=self.header_img, bg="white")
-            lbl_header.pack()
-        except:
-            lbl_header = tk.Label(self, bg="#003366", width=430, height=12)
-            lbl_header.pack()
+    def set_role(self, role):
+        self.role = role
+        self.lbl_role.config(text=f"Iniciar sesión — {role}")
 
     def create_back_button(self):
-        btn_back = tk.Button(self, text="←", font=("Arial", 20, "bold"),
-                             bg="#0047AB", fg="white", bd=0, relief="flat",
-                             cursor="hand2", command=self.go_back)
-        btn_back.place(x=380, y=10, width=40, height=40)
+        btn = tk.Button(self, text="←", font=("Arial", 18, "bold"),
+                        bg="#0047AB", fg="white", bd=0, command=self.controller.go_back)
+        btn.place(x=380, y=10, width=40, height=40)
 
-    def create_login_form(self):
+    def create_form(self):
         frame = tk.Frame(self, bg="white")
         frame.pack(pady=20)
 
-        # Etiqueta usuario
-        lbl_user = tk.Label(frame, text="Escribe tu usuario", font=("Arial", 10, "bold"),
-                            fg="black", bg="white")
-        lbl_user.pack(anchor="w", padx=40)
+        self.lbl_role = tk.Label(frame, text="Iniciar sesión",
+                                 font=("Arial", 12, "bold"), bg="white")
+        self.lbl_role.pack(pady=5)
 
-        self.entry_user = tk.Entry(frame, font=("Arial", 12), width=30, fg="black", bd=1, relief="solid")
-        self.entry_user.pack(pady=5, ipady=5)
+        tk.Label(frame, text="Usuario", bg="white").pack()
+        self.entry_user = tk.Entry(frame)
+        self.entry_user.pack(pady=5)
 
-        self.lbl_error = tk.Label(frame, text="", fg="red", bg="white", font=("Arial", 9))
-        self.lbl_error.pack(anchor="w", padx=40)
+        tk.Label(frame, text="Contraseña", bg="white").pack()
+        self.entry_pass = tk.Entry(frame, show="*")
+        self.entry_pass.pack(pady=5)
 
-        lbl_forgot_user = tk.Label(frame, text="¿Olvidaste tu usuario?", font=("Arial", 9),
-                                   fg="#3366CC", bg="white", cursor="hand2")
-        lbl_forgot_user.pack(anchor="e", padx=40)
-
-        # Contraseña
-        lbl_pass = tk.Label(frame, text="Contraseña", font=("Arial", 10, "bold"),
-                            fg="black", bg="white")
-        lbl_pass.pack(anchor="w", padx=40, pady=(10, 0))
-
-        self.entry_pass = tk.Entry(frame, font=("Arial", 12), show="*", width=30, fg="black", bd=1, relief="solid")
-        self.entry_pass.pack(pady=5, ipady=5)
-
-        lbl_forgot_pass = tk.Label(frame, text="¿Olvidaste tu contraseña?", font=("Arial", 9),
-                                   fg="#3366CC", bg="white", cursor="hand2")
-        lbl_forgot_pass.pack(anchor="e", padx=40, pady=(5, 20))
-
-        btn_login = tk.Button(frame, text="Inicia sesión", font=("Arial", 13, "bold"),
-                              bg="#3366CC", fg="white", width=25, height=2,
-                              bd=0, relief="flat", command=self.check_login)
-        btn_login.pack(pady=10)
-
-        lbl_register = tk.Label(frame, text="¿Aún no tienes una cuenta? ",
-                                font=("Arial", 9), bg="white")
-        lbl_register.pack(side="left", padx=(60, 0), pady=10)
-
-        lbl_link = tk.Label(frame, text="Regístrate aquí", font=("Arial", 9, "underline"),
-                            fg="#FF9900", bg="white", cursor="hand2")
-        lbl_link.pack(side="left")
+        btn = tk.Button(frame, text="Inicia sesión", bg="#3366CC",
+                        fg="white", width=20, command=self.check_login)
+        btn.pack(pady=15)
 
     def check_login(self):
-        username = self.entry_user.get().strip()
-        password = self.entry_pass.get().strip()
+        if not self.entry_user.get().strip() or not self.entry_pass.get().strip():
+            messagebox.showerror("Error", "Completa todos los campos")
+            return
 
-        # Ejemplo de validación (aquí luego conectas tu JSON)
-        if username != "admin" or password != "1234":
-            self.lbl_error.config(text="¡Usuario incorrecto!", fg="red")
-            self.entry_user.config(highlightbackground="red", highlightcolor="red", fg="red")
-        else:
-            self.lbl_error.config(text="Acceso correcto", fg="green")
+        dashboard = self.controller.frames["DashboardFrame"]
+        dashboard.set_user(self.entry_user.get(), self.role)
 
-    def go_back(self):
-        self.destroy()
-        self.parent.deiconify()
+        self.controller.show_frame("DashboardFrame")
+        self.controller.nav_stack.clear()
 
+
+# ------------------------------------------------------------
+#  DASHBOARD
+# ------------------------------------------------------------
+class DashboardFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.username = None
+        self.role = None
+        self.create_ui()
+
+    def create_ui(self):
+        self.create_header_image_or_bar()
+
+        actions = tk.Frame(self, bg="white")
+        actions.pack(pady=20)
+
+        cfg = {"font": ("Arial", 14, "bold"), "bg": "#1e73b8", "fg": "white",
+               "width": 28, "height": 2, "bd": 0}
+
+        tk.Button(actions, text="Crear Usuario", command=self.on_crear, **cfg).pack(pady=10)
+        tk.Button(actions, text="Actualizar Usuario", command=self.on_actualizar, **cfg).pack(pady=10)
+        tk.Button(actions, text="Eliminar Usuario", command=self.on_eliminar, **cfg).pack(pady=10)
+        tk.Button(actions, text="Listar Usuarios", command=self.on_listar, **cfg).pack(pady=10)
+
+        bottom = tk.Frame(self, bg="white")
+        bottom.pack(side="bottom", fill="x", pady=15)
+
+        self.lbl_user = tk.Label(bottom, text="", bg="white")
+        self.lbl_user.pack(side="left", padx=10)
+
+        tk.Button(bottom, text="Cerrar sesión", bg="#777", fg="white",
+                  command=self.logout).pack(side="right", padx=10)
+
+    def set_user(self, user, role):
+        self.username = user
+        self.role = role
+        self.lbl_user.config(text=f"Usuario: {user}  |  Rol: {role}")
+
+    def logout(self):
+        self.controller.show_frame("WelcomeFrame")
+        self.controller.nav_stack.clear()
+
+    # acciones CRUD
+    def on_crear(self):
+        self.controller.frames["UserFormFrame"].open_for("crear")
+
+    def on_actualizar(self):
+        self.controller.frames["UserFormFrame"].open_for("actualizar")
+
+    def on_eliminar(self):
+        self.controller.frames["UserFormFrame"].open_for("eliminar")
+
+    def on_listar(self):
+        self.controller.frames["UserFormFrame"].open_for("listar")
+
+
+# ------------------------------------------------------------
+#  USER FORM (CRUD)
+# ------------------------------------------------------------
+class UserFormFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.action = None
+
+        self.create_header_image_or_bar()
+        self.create_back_button()
+        self.create_form()
+
+    def create_back_button(self):
+        btn = tk.Button(self, text="←", font=("Arial", 18, "bold"),
+                        bg="#0047AB", fg="white", command=self.controller.go_back)
+        btn.place(x=380, y=10, width=40, height=40)
+
+    def create_form(self):
+        self.form = tk.Frame(self, bg="white")
+        self.form.pack(pady=20)
+
+        self.entry_nombre = self.create_entry("Nombre completo")
+        self.entry_documento = self.create_entry("Número de documento")
+        self.entry_telefono = self.create_entry("Teléfono")
+
+        tk.Label(self.form, text="Rol", bg="white").pack()
+        self.var_rol = tk.StringVar()
+        self.combo_rol = ttk.Combobox(self.form, values=["Administrador", "Doctor", "Paciente"],
+                                      state="readonly", textvariable=self.var_rol, width=30)
+        self.combo_rol.pack(pady=5)
+
+        row = tk.Frame(self.form, bg="white")
+        row.pack()
+
+        tk.Label(row, text="Edad", bg="white").grid(row=0, column=0)
+        self.entry_edad = tk.Entry(row, width=10)
+        self.entry_edad.grid(row=1, column=0, padx=5)
+
+        tk.Label(row, text="Peso", bg="white").grid(row=0, column=1)
+        self.entry_peso = tk.Entry(row, width=10)
+        self.entry_peso.grid(row=1, column=1, padx=5)
+
+        self.btn_action = tk.Button(self.form, text="", bg="#3366CC",
+                                    fg="white", font=("Arial", 13),
+                                    width=25, height=2, command=self.on_action)
+        self.btn_action.pack(pady=20)
+
+    def create_entry(self, text):
+        tk.Label(self.form, text=text, bg="white").pack()
+        entry = tk.Entry(self.form, width=30)
+        entry.pack(pady=5)
+        return entry
+
+    # ------- JSON I/O -------
+    def load_users(self):
+        if not os.path.exists("usuarios.json"):
+            return []
+        try:
+            with open("usuarios.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
+
+    def save_users(self, users):
+        with open("usuarios.json", "w", encoding="utf-8") as f:
+            json.dump(users, f, indent=4, ensure_ascii=False)
+
+    # ------- OPEN FORM -------
+    def open_for(self, action):
+        self.action = action
+        self.btn_action.config(text=action.capitalize() + " usuario")
+
+        for entry in (self.entry_nombre, self.entry_documento,
+                      self.entry_telefono, self.entry_edad, self.entry_peso):
+            entry.delete(0, tk.END)
+        self.var_rol.set("")
+
+        self.controller.show_frame("UserFormFrame")
+
+    def get_user_data(self):
+        return {
+            "nombre": self.entry_nombre.get().strip(),
+            "documento": self.entry_documento.get().strip(),
+            "telefono": self.entry_telefono.get().strip(),
+            "rol": self.var_rol.get(),
+            "edad": self.entry_edad.get().strip(),
+            "peso": self.entry_peso.get().strip()
+        }
+
+    # ------- CRUD -------
+    def on_action(self):
+        users = self.load_users()
+        doc = self.entry_documento.get().strip()
+
+        existing = next((u for u in users if u["documento"] == doc), None)
+
+        if self.action == "crear":
+            if existing:
+                messagebox.showerror("Error", "El usuario ya existe.")
+                return
+            users.append(self.get_user_data())
+            self.save_users(users)
+            messagebox.showinfo("OK", "Usuario creado.")
+
+        elif self.action == "actualizar":
+            if not existing:
+                messagebox.showerror("Error", "El usuario no existe.")
+                return
+            idx = users.index(existing)
+            users[idx] = self.get_user_data()
+            self.save_users(users)
+            messagebox.showinfo("OK", "Usuario actualizado.")
+
+        elif self.action == "eliminar":
+            if not existing:
+                messagebox.showerror("Error", "El usuario no existe.")
+                return
+            users.remove(existing)
+            self.save_users(users)
+            messagebox.showinfo("OK", "Usuario eliminado.")
+
+        elif self.action == "listar":
+            if not users:
+                messagebox.showinfo("Lista", "No hay usuarios.")
+            else:
+                msg = "\n".join([f"{u['nombre']} — {u['documento']}" for u in users])
+                messagebox.showinfo("Listado de usuarios", msg)
+
+        self.controller.go_back()
+
+
+# ------------------------------------------------------------
+#  RUN
+# ------------------------------------------------------------
 def run():
-    print("Iniciando la aplicación GUI")
-    app = WelcomeApp()
+    app = MainApp()
     app.mainloop()
 
 
 if __name__ == "__main__":
-    app = WelcomeApp()
-    app.mainloop()
+    run()
