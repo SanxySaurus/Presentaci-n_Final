@@ -417,29 +417,34 @@ class DashboardFrame(BaseFrame):
         self.role = role
         self.lbl_user.config(text=f"Usuario: {user}  |  Rol: {role}")
 
-        # mostrar/ocultar botones sin cambiar formato
+        # Primero ocultamos todos los botones adicionales
+        for w in self.actions.winfo_children():
+            w.pack_forget()
+
+        # Botones CRUD para Administrador
         if role == "Administrador":
             self.btn_crear.pack(pady=10)
             self.btn_actualizar.pack(pady=10)
             self.btn_eliminar.pack(pady=10)
             self.btn_listar.pack(pady=10)
         else:
-            # esconder CRUD
-            self.btn_crear.pack_forget()
-            self.btn_actualizar.pack_forget()
-            self.btn_eliminar.pack_forget()
-            self.btn_listar.pack_forget()
-
-            # eliminar posibles botones anteriores
-            for w in self.actions.winfo_children():
-                if isinstance(w, tk.Button) and w.cget("text") in ("Panel Doctor", "Panel Paciente", "Ver ECG (Explorar)"):
-                    w.destroy()
-
+            # Botones para Doctor o Paciente
             if role == "Doctor":
-                tk.Button(self.actions, text="Panel Doctor", command=lambda: self.controller.show_frame("DoctorPanelFrame"), **cfg).pack(pady=10)
-                tk.Button(self.actions, text="Ver ECG (Explorar)", command=lambda: self.controller.show_frame("ECGViewerFrame"), **cfg).pack(pady=10)
+                tk.Button(self.actions, text="Panel Doctor",
+                        command=lambda: self.controller.show_frame("DoctorPanelFrame"),
+                        font=("Arial", 14, "bold"), bg="#1e73b8", fg="white",
+                        width=28, height=2, bd=0).pack(pady=10)
+                tk.Button(self.actions, text="Ver ECG (Explorar)",
+                        command=lambda: self.controller.show_frame("ECGViewerFrame"),
+                        font=("Arial", 14, "bold"), bg="#1e73b8", fg="white",
+                        width=28, height=2, bd=0).pack(pady=10)
             elif role == "Paciente":
-                tk.Button(self.actions, text="Panel Paciente", command=lambda: self.controller.show_frame("PatientPanelFrame"), **cfg).pack(pady=10)
+                tk.Button(self.actions, text="Panel Paciente",
+                        command=lambda: self.controller.show_frame("PatientPanelFrame"),
+                        font=("Arial", 14, "bold"), bg="#1e73b8", fg="white",
+                        width=28, height=2, bd=0).pack(pady=10)
+
+
 
     def logout(self):
         try: self.controller.frames["LoginFrame"].clear_fields()
@@ -966,3 +971,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
